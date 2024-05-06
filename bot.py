@@ -28,10 +28,13 @@ from botcity.web import WebBot, Browser, By
 from botcity.web.util import element_as_select
 from botcity.web.parsers import table_to_dict
 from botcity.maestro import *
+from botcity.plugins.excel import BotExcelPlugin
 
 # Disable errors if we are not connected to Maestro
 BotMaestroSDK.RAISE_NOT_CONNECTED = False
 
+excel = BotExcelPlugin()
+excel.add_row(["CIDADE","POPULACAO"])
 
 def main():
     # Runner passes the server url, the id of the task being executed,
@@ -39,6 +42,8 @@ def main():
     maestro = BotMaestroSDK.from_sys_args()
     ## Fetch the BotExecution with details from the task, including parameters
     execution = maestro.get_execution()
+
+    #maestro.login(server="https://developers.botcity.dev/",login="d5107e28-7d3d-431a-9c29-fd69a8b58c13", key="D51_IAH2WF7VEGFD71SXH3RY")
 
     print(f"Task ID is: {execution.task_id}")
     print(f"Task Parameters are: {execution.parameters}")
@@ -52,8 +57,8 @@ def main():
     bot.browser = Browser.CHROME
 
     # Uncomment to set the WebDriver path
-    bot.driver_path = r"C:\Users\shica\Documents\Robos\chromedriver-win64\chromedriver-win64\chromedriver.exe"
-
+    #bot.driver_path = r"C:\Users\shica\Documents\Robos\chromedriver-win64\chromedriver-win64\chromedriver.exe"
+    bot.driver_path = r"C:\Users\JoaoRosa\Documents\Robos\chromedriver-win64\chromedriver.exe"
     # Opens the BotCity website.
     bot.browse("https://buscacepinter.correios.com.br/app/faixa_cep_uf_localidade/index.php")
 
@@ -71,15 +76,30 @@ def main():
 
     bot.navigate_to("https://cidades.ibge.gov.br/brasil/sp/panorama")
 
+    int_contador = 1
+    str_CidadeAnterior =""
+
     for cidade in table_dados:
         str_cidade = cidade["localidade"]
-        campo_pesquisa = bot.find_element("//input[@placeholder='O que você procura?']", By.XPATH)
-        campo_pesquisa.send_keys(str_cidade)
-        bot.wait(2000)
-        opcao_cidade = bot.find_element(f"//a[contains(span,'{str_cidade}')]", By.XPATH)
-        opcao_cidade.click()
-
-
+        if str_CidadeAnterior == str_cidade:
+            continue
+        if int_contador<=5:        
+            campo_pesquisa = bot.find_element("//input[@placeholder='O que você procura?']", By.XPATH)
+            campo_pesquisa.send_keys(str_cidade)
+            bot.wait(2000)
+            opcao_cidade = bot.find_element(f"//a[span[contains(text(),'{str_cidade}')] and span[contains(text(),'SP')]]", By.XPATH)
+            opcao_cidade.click()
+            bot.wait(2000)
+            populacao = bot.find_element("//div[@class='indicador__valor']", By.XPATH)
+            str_populacao = populacao.text
+            excel.add_row([str_cidade,str_populacao])
+            maestro.new_log_entry(activity_label="CIDADES",values={"CIDADE":f"{str_cidade}","POPULACAO":f"{str_populacao}"})
+            int_contador = int_contador +1
+            str_CidadeAnterior = str_cidade
+        else:
+            print("Numero maximo de cidades atingido")
+            break
+    excel.write(r"C:\Users\JoaoRosa\Documents\Robos\Projetos\IntensivoRPABotCityT2C\Infos_Cidades.xlsx")
     # Wait 3 seconds before closing
     bot.wait(5000)
 
@@ -89,11 +109,11 @@ def main():
     bot.stop_browser()
 
     # Uncomment to mark this task as finished on BotMaestro
-    # maestro.finish_task(
-    #     task_id=execution.task_id,
-    #     status=AutomationTaskFinishStatus.SUCCESS,
-    #     message="Task Finished OK."
-    # )
+    maestro.finish_task(
+        task_id=execution.task_id,
+        status=AutomationTaskFinishStatus.SUCCESS,
+        message="Task Finished OK."
+    )
 
 
 def not_found(label):
